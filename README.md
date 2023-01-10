@@ -14,7 +14,7 @@ You can access the reports and logs that are generted as a results from \bin\Deb
 - Excel Data Libraray 
 - RestSharpAPI Framwork
 - NLogger 
-- Extend Report 
+- Extent Report 
 
 # Assumptions : 
 - Your sample APIs are working properly
