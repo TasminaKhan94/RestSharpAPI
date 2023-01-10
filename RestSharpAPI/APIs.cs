@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using RestSharp;
 using System.IO;
 using System.Collections.Generic;
 using AventStack.ExtentReports;
+using Newtonsoft.Json.Linq;
 
 namespace RestSharpAPI
 {
@@ -28,6 +29,9 @@ namespace RestSharpAPI
         private string log_name = string.Empty;
         private string AppConfiguration_ExcelFileName = string.Empty;
         private Report_Method ReportMethods;
+        string jsonData;
+        dynamic data;
+        string bookingid;
         public void Run()
         {
 
@@ -45,6 +49,9 @@ namespace RestSharpAPI
                 string RequestType = ExcelLib.ReadData(dataCol, i, "RequestType");
                 string RequestURL = ExcelLib.ReadData(dataCol, i, "RequestURL");
                 string RequestBody = ExcelLib.ReadData(dataCol, i, "RequestBody");
+                string Token = ExcelLib.ReadData(dataCol, i, "Token");
+                string TokenBody = ExcelLib.ReadData(dataCol, i, "TokenBody");
+                
 
 
                 if (!String.IsNullOrEmpty(TestCaseID))
@@ -63,51 +70,80 @@ namespace RestSharpAPI
                         if (RequestType == "POST")
                         {
                             IRestResponse postreq = obj.CallPostAPIRequest(RequestURL, RequestBody);
+                            var StatusCode = postreq.StatusCode;
+                            if (StatusCode.Equals("OK"))
+                            { HelpObj.ReportPass("StatusCode for POST: " + StatusCode, test, TestCaseID); }
+                            else { HelpObj.ReportFail("StatusCode for POST :" + StatusCode, test, TestCaseID); }
+
+
                             var responsePost = postreq.Content;
+                            
+                              jsonData = responsePost;
+                             data = JObject.Parse(jsonData);
+                             bookingid = data.bookingid;
+
                             logger.Info("Information about Post URL : " + RequestURL + Environment.NewLine +
                                 "Body: " + RequestBody + Environment.NewLine +
                                  "Response: " + responsePost + Environment.NewLine);
-                            if (responsePost== "I'm a Teapot")
-                            { HelpObj.ReportPass("Success for RequestType" + responsePost, test, TestCaseID); }
-                            else { HelpObj.ReportFail("Failed for RequestType" + responsePost, test, TestCaseID); }
+                            if (responsePost.Contains("bookingid"))
+                            { HelpObj.ReportPass("Success for POST" + responsePost, test, TestCaseID); }
+                            else { HelpObj.ReportFail("Failed for POST" + responsePost, test, TestCaseID); }
                         }
 
                         if (RequestType == "GET")
                         {
                             IRestResponse gettreq = obj.CallGetAPIRequest(RequestURL);
+                            var StatusCode = gettreq.StatusCode;
+                            if (StatusCode.Equals("OK"))
+                            { HelpObj.ReportPass("StatusCode for Request: " + StatusCode, test, TestCaseID); }
+                            else { HelpObj.ReportFail("StatusCode for Request :" + StatusCode, test, TestCaseID); }
+
                             var responseGET = gettreq.Content;
                             logger.Info("Information about Get URL : " + RequestURL + Environment.NewLine +
                                  "Gettreq: " + gettreq + Environment.NewLine +
                                   "Response: " + responseGET + Environment.NewLine);
                             Console.WriteLine("Get Request:" + responseGET);
-                            if (responseGET == "I'm a Teapot")
-                            { HelpObj.ReportPass("Success for RequestType" + responseGET, test, TestCaseID); }
-                            else { HelpObj.ReportFail("Failed for RequestType" + responseGET, test, TestCaseID); }
+                            if (responseGET.Contains("Josh") || responseGET.Contains("Not Found"))
+                            { HelpObj.ReportPass("Success for GET " + responseGET, test, TestCaseID); }
+                            else { HelpObj.ReportFail("Failed for GET " + responseGET, test, TestCaseID); }
                         }
-
-                        if (RequestType == "DELETE")
-                        {
-                            
-                            IRestResponse deletereq = obj.CallDeleteAPIRequest(RequestURL);
-                            var responsedelete = deletereq.Content;
-                            Console.WriteLine("Get Request:" + responsedelete);
-                            if (responsedelete == "I'm a Teapot")
-                            { HelpObj.ReportPass("Success for RequestType" + responsedelete, test, TestCaseID); }
-                            else { HelpObj.ReportFail("Failed for RequestType" + responsedelete, test, TestCaseID); }
-                        }
-
                         if (RequestType == "PUT")
                         {
+                            var tokenValue = TokenCall(Token, TokenBody, test);
 
-                            IRestResponse putreq = obj.CallPostAPIRequest(RequestURL, RequestBody);
+                             IRestResponse putreq = obj.CallPostAPIRequest(RequestURL, RequestBody);
+                            
                             var responsePost = putreq.Content;
                             logger.Info("Information about Post URL : " + RequestURL + Environment.NewLine +
                                 "Body: " + RequestBody + Environment.NewLine +
                                  "Response: " + responsePost + Environment.NewLine);
-                            if (responsePost == "I'm a Teapot")
-                            { HelpObj.ReportPass("Success for RequestType" + responsePost, test, TestCaseID); }
-                            else { HelpObj.ReportFail("Failed for RequestType" + responsePost, test, TestCaseID); }
+                            if (responsePost.Contains("bookingid"))
+                            { HelpObj.ReportPass("Success for PUT " + responsePost, test, TestCaseID); }
+                            else { HelpObj.ReportFail("Failed for PUT " + responsePost, test, TestCaseID); }
                         }
+                        if (RequestType == "DELETE")
+                        {
+                            var tokenValue = TokenCall(Token, TokenBody, test);
+                           
+                           
+
+                            IRestResponse deletereq = obj.CallDeleteAPIRequest(RequestURL, tokenValue);
+                            var StatusCode = deletereq.StatusCode;
+                            if (StatusCode.Equals("OK")  )
+                            { HelpObj.ReportPass("StatusCode for Request: " + StatusCode, test, TestCaseID); }
+                            else if(StatusCode.Equals("Forbidden"))
+                            { HelpObj.ReportPass("StatusCode for Request: " + StatusCode+ " ID already deleted", test, TestCaseID); }
+                            else { HelpObj.ReportFail("StatusCode for Request :" + StatusCode, test, TestCaseID); }
+
+
+                            var responsedelete = deletereq.Content;
+                            Console.WriteLine("Get Request:" + responsedelete);
+                            if (responsedelete == "Created" || responsedelete == "Forbidden")
+                            { HelpObj.ReportPass("Success for DELETE" + responsedelete, test, TestCaseID); }
+                            else { HelpObj.ReportFail("Failed for DELETE" + responsedelete, test, TestCaseID); }
+                        }
+
+                       
                         HelpObj.ReportFlush();
                     }
                     catch (Exception ex)
@@ -127,47 +163,18 @@ namespace RestSharpAPI
 
 
 
-            //string PostURL = "https://restful-booker.herokuapp.com/booking";
-            //string Body = " {\"firstname\" : \"Jim13\",\"lastname\" : \"Brown\", \"totalprice\" : 111, \"depositpaid\" : true, \"bookingdates\" : " +
-            //    "{\"checkin\" : \"2018-01-01\",\"checkout\" : \"2019-01-01\"},\"additionalneeds\" : \"Breakfast\"}";
-
-            //IRestResponse postreq = obj.CallPostAPIRequest(PostURL, Body);
-            //var responsePost = postreq.Content;
-            //logger.Info("Information about Post URL : " + PostURL + Environment.NewLine +
-            //    "Body: " + Body + Environment.NewLine +
-            //     "Response: " + responsePost + Environment.NewLine);
-            //Console.WriteLine("Post Request:" + responsePost);
-
-
-           // string Geturl = "https://restful-booker.herokuapp.com/booking/487";
-            //IRestResponse gettreq = obj.CallGetAPIRequest(Geturl);
-            //var responseGET = gettreq.Content;
-            //logger.Info("Information about Get URL : " + Geturl + Environment.NewLine +
-            //     "Gettreq: " + gettreq + Environment.NewLine +
-            //      "Response: " + responseGET + Environment.NewLine);
-            //Console.WriteLine("Get Request:" + responseGET);
-
-
-            //string deleteurl = "https://restful-booker.herokuapp.com/booking/487";
-            //IRestResponse deletereq = obj.CallDeleteAPIRequest(deleteurl);
-            //var responsedelete = deletereq.Content;
-            //Console.WriteLine("Get Request:" + responsedelete);
-
-
             Console.ReadKey();
         }
-        void InitializeReportingFrameWork()
+        string TokenCall( string Token, string TokenBody,ExtentTest test)
         {
-
-            logger.Info("InitializeReportFrameWork : " + DateTime.Now.ToString("HH:mm:ss:ffffff"));
-            reportPath = target + "\\" + "Report.html";
-            // screenshot_path = target + "\\ScreenShots";
-            screenshot_path = target + "";
-            string pathToLoadConfig = Directory.GetCurrentDirectory();
-            pathToLoadConfig = pathToLoadConfig.Replace("\\bin\\Debug", "\\");
-            ReportMethods = new Report_Method(logger, screenshot_path);
-            ReportMethods.InitializeExtent(target, reportPath, build_username, build_ID, build_number, environment);
-            logger.Info("InitializeReportFrameWork - Completed : " + DateTime.Now.ToString("HH:mm:ss:ffffff"));
+            RestMethods obj = new RestMethods();
+            IRestResponse tokenReq = obj.CallPostAPIRequest(Token, TokenBody);
+            var tokenValue = tokenReq.Content;
+            tokenValue = tokenValue.Replace("{\"", "");
+            tokenValue = tokenValue.Replace("\"}", "");
+            tokenValue = tokenValue.Replace("\":\"", "=");
+            HelpObj.ReportPass("Success for token: " + tokenValue, test, "");
+            return tokenValue;
         }
     }
 }
